@@ -469,6 +469,12 @@ void Graph::register_task(char const *task_type, std::vector<int> params) {
         customized->bgraph, params);
     task_config[op] =
         std::make_tuple(2, 1, TASK_DFLASH_KV_STORE_SM100, variant_id);
+  } else if (name == "minimax_qk_norm_rope") {
+    int variant_id =
+        task_register->register_minimax_qk_norm_rope_sm100_task(
+            customized->bgraph, params);
+    task_config[op] = std::make_tuple(
+        5, 1, TASK_MINIMAX_QK_NORM_ROPE_SM100, variant_id);
   } else if (name == "inkling_sconv") {
     int variant_id = task_register->register_inkling_sconv_sm100_task(
         customized->bgraph, params);

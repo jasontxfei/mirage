@@ -1032,6 +1032,50 @@ class PersistentKernel:
         self.kn_graph.customized([kv_in, slot_mapping, cache], tb_graph)
         self.kn_graph.register_task(tb_graph, "dflash_kv_store", params)
 
+    def minimax_qk_norm_rope_layer(
+        self,
+        qkv: DTensor,       # [tokens, (num_q_heads + 2*num_kv_heads)*head_dim]
+        q_norm: DTensor,    # [num_q_heads*head_dim]
+        k_norm: DTensor,    # [num_kv_heads*head_dim]
+        cos: DTensor,       # [tokens, rotary_dim]
+        sin: DTensor,       # [tokens, rotary_dim]
+        output: DTensor,    # same packed, KV-head-interleaved layout as qkv
+        grid_dim: tuple,
+        block_dim: tuple,
+        head_dim: int = 128,
+        rotary_dim: int = 64,
+        eps: float = 1e-6,
+    ):
+        """MiniMax projection-wide Q/K RMSNorm followed by partial RoPE."""
+        import struct
+
+        assert qkv.num_dims == 2 and output.num_dims == 2
+        assert q_norm.num_dims == 1 and k_norm.num_dims == 1
+        assert cos.num_dims == 2 and sin.num_dims == 2
+        assert qkv.dim(0) == output.dim(0)
+        assert qkv.dim(1) == output.dim(1)
+        assert grid_dim == (qkv.dim(0), 1, 1)
+        assert block_dim == (128, 1, 1)
+        assert q_norm.dim(0) % head_dim == 0
+        assert k_norm.dim(0) % head_dim == 0
+        assert qkv.dim(1) == q_norm.dim(0) + 2 * k_norm.dim(0)
+        assert cos.dim(0) == qkv.dim(0) and sin.dim(0) == qkv.dim(0)
+        assert cos.dim(1) == rotary_dim and sin.dim(1) == rotary_dim
+        eps_bits = struct.unpack("i", struct.pack("f", eps))[0]
+        params = [head_dim, rotary_dim, eps_bits]
+        row_map = (0, -1, -1)
+        tb_graph = TBGraph(CyTBGraph(grid_dim, block_dim, 1, 64))
+        tb_graph.new_input(qkv, row_map, -1, True)
+        tb_graph.new_input(q_norm, (-1, -1, -1), -1, True)
+        tb_graph.new_input(k_norm, (-1, -1, -1), -1, True)
+        tb_graph.new_input(cos, row_map, -1, True)
+        tb_graph.new_input(sin, row_map, -1, True)
+        tb_graph.new_input(output, row_map, -1, True)
+        self.kn_graph.customized(
+            [qkv, q_norm, k_norm, cos, sin, output], tb_graph
+        )
+        self.kn_graph.register_task(tb_graph, "minimax_qk_norm_rope", params)
+
     def inkling_attention_layer(
         self,
         q: DTensor,       # [1, num_q_heads*head_dim] (per-head q_norm applied)

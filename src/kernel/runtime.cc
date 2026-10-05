@@ -1812,6 +1812,8 @@ TaskGraphResult print_task_graph(
   task_type_to_name[TASK_DFLASH_NORM_ROPE_SM100] =
       "TASK_DFLASH_NORM_ROPE_SM100";
   task_type_to_name[TASK_DFLASH_KV_STORE_SM100] = "TASK_DFLASH_KV_STORE_SM100";
+  task_type_to_name[TASK_MINIMAX_QK_NORM_ROPE_SM100] =
+      "TASK_MINIMAX_QK_NORM_ROPE_SM100";
   task_type_to_name[TASK_GLM_MOE_ROUTER_SM100] = "TASK_GLM_MOE_ROUTER_SM100";
   task_type_to_name[TASK_CLAMPED_SWIGLU] = "TASK_CLAMPED_SWIGLU";
   task_type_to_name[TASK_INKLING_SCONV_SM100] = "TASK_INKLING_SCONV_SM100";

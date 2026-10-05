@@ -38,8 +38,18 @@ MiniMax support should reuse rather than duplicate these existing components:
   generic GQA-template work should be coordinated there rather than duplicated
   under the MiniMax model work.
 
-Next step: implement and validate only the missing SM100 projection-wide
-QK-normalization + partial-RoPE preprocessing task against
-`pytorch_reference.py`, then connect it to the shared GQA implementation with
-the existing per-head normalization and RoPE disabled. Port the existing
-sigmoid router into the static task ABI when the MiniMax MoE slice begins.
+## Implemented slice
+
+`minimax_qk_norm_rope_sm100.cuh` implements the missing preprocessing task for
+the MiniMax-M2.5 geometry. One task processes one token's KV-head-interleaved
+QKV row, reduces Q across 6,144 elements and K across 1,024 elements, applies
+the projection-wide weights, performs the bf16 round-trip, rotates the first 64
+channels of every Q/K head, and copies V unchanged. The task is registered in
+`PersistentKernel.minimax_qk_norm_rope_layer` and has an SM100 test-mode check
+against `pytorch_reference.py`.
+
+The test still needs to be compiled and run on Blackwell. This development
+machine has no CUDA toolkit or GPU. After device validation, connect the task's
+packed output to shared paged GQA with the existing per-head normalization and
+RoPE disabled. Port the existing sigmoid router into the static task ABI when
+the MiniMax MoE slice begins.

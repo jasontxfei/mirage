@@ -223,6 +223,11 @@ enum TaskType {
   // Clamped-alpha SwiGLU: (clamp(up) + 1) * clamp(gate) * sigmoid(gate*alpha)
   TASK_CLAMPED_SWIGLU = 451,
   TASK_GPT_OSS_TASK_END = 499, // end placeholder, not a real task
+  // MiniMax-M2.x tasks, SM100
+  TASK_MINIMAX_TASK_BEGIN = 500, // begin placeholder, not a real task
+  // Projection-wide Q/K RMSNorm followed by partial RoPE.
+  TASK_MINIMAX_QK_NORM_ROPE_SM100 = 501,
+  TASK_MINIMAX_TASK_END = 549, // end placeholder, not a real task
 };
 
 enum EventType {

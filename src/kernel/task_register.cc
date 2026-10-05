@@ -255,6 +255,65 @@ int TaskRegister::register_dflash_kv_store_sm100_task(
   return register_task_variant(TASK_DFLASH_KV_STORE_SM100, code.to_string());
 }
 
+int TaskRegister::register_minimax_qk_norm_rope_sm100_task(
+    threadblock::Graph const &bgraph, std::vector<int> const &params) {
+  // params: [head_dim, rotary_dim, eps bits]. Five inputs: packed qkv,
+  // projection-wide q/k norm weights, cos, sin. One packed qkv output.
+  assert(params.size() == 3);
+  int head_dim = params[0];
+  int rotary_dim = params[1];
+  float eps;
+  memcpy(&eps, &params[2], sizeof(float));
+  std::vector<tb::TBInputOp *> input_ops;
+  std::vector<tb::TBInputOp *> output_ops;
+  int num_inputs = 5;
+  int num_outputs = 1;
+  assert(bgraph.operators.size() == (size_t)num_inputs + num_outputs);
+  for (auto const &op : bgraph.operators) {
+    assert(op->op_type == mirage::type::TB_INPUT_OP);
+    if (input_ops.size() < (size_t)num_inputs) {
+      input_ops.push_back(static_cast<tb::TBInputOp *>(op));
+    } else {
+      output_ops.push_back(static_cast<tb::TBInputOp *>(op));
+    }
+  }
+  assert(input_ops[0]->dtensor.num_dims == 2);  // packed qkv
+  assert(input_ops[1]->dtensor.num_dims == 1);  // q norm weight
+  assert(input_ops[2]->dtensor.num_dims == 1);  // k norm weight
+  assert(input_ops[3]->dtensor.num_dims == 2);  // cos
+  assert(input_ops[4]->dtensor.num_dims == 2);  // sin
+  assert(output_ops[0]->dtensor.num_dims == 2); // packed qkv output
+  int qkv_stride = input_ops[0]->dtensor.dim[1];
+  int q_dim = input_ops[1]->dtensor.dim[0];
+  int k_dim = input_ops[2]->dtensor.dim[0];
+  assert(head_dim > 0 && rotary_dim > 0 && rotary_dim <= head_dim);
+  assert(q_dim % head_dim == 0 && k_dim % head_dim == 0);
+  int num_q_heads = q_dim / head_dim;
+  int num_kv_heads = k_dim / head_dim;
+  assert(num_q_heads % num_kv_heads == 0);
+  assert(qkv_stride == q_dim + 2 * k_dim);
+  assert(output_ops[0]->dtensor.dim[1] == qkv_stride);
+  assert(input_ops[3]->dtensor.dim[1] == rotary_dim);
+  assert(input_ops[4]->dtensor.dim[1] == rotary_dim);
+  mirage::transpiler::CodeKeeper code;
+  code.inc_indent();
+  code.e("kernel::minimax_qk_norm_rope_sm100<bfloat16, $, $, $, $, $>(",
+         num_q_heads,
+         num_kv_heads,
+         head_dim,
+         rotary_dim,
+         qkv_stride);
+  code.e("    task_desc->input_ptrs[0],");  // packed qkv
+  code.e("    task_desc->input_ptrs[1],");  // q norm weight
+  code.e("    task_desc->input_ptrs[2],");  // k norm weight
+  code.e("    task_desc->input_ptrs[3],");  // cos
+  code.e("    task_desc->input_ptrs[4],");  // sin
+  code.e("    task_desc->output_ptrs[0],"); // packed qkv output
+  code.e("    $f);", eps);
+  return register_task_variant(TASK_MINIMAX_QK_NORM_ROPE_SM100,
+                               code.to_string());
+}
+
 int TaskRegister::register_glm_moe_router_sm100_task(
     threadblock::Graph const &bgraph, std::vector<int> const &params) {
   // params: [routed_scaling_factor bits, n_shared]. 2 inputs (logits
