@@ -7,7 +7,18 @@ Run on a Blackwell GPU with:
 
 import os
 
+import pytest
 import torch
+
+# Keep the reference-only tests runnable on development machines that cannot
+# load Mirage's CUDA extension.  Device validation still runs normally on
+# Blackwell hosts.
+if not torch.cuda.is_available():
+    pytest.skip("requires a CUDA GPU", allow_module_level=True)
+
+major, _ = torch.cuda.get_device_capability()
+if major < 10:
+    pytest.skip("requires an SM100-or-newer GPU", allow_module_level=True)
 
 import mirage
 from mirage.mpk.persistent_kernel import PersistentKernel
@@ -47,10 +58,6 @@ def _pack_qkv(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor) -> torch.Tensor
 
 
 def test_minimax_qk_norm_rope_testmode():
-    assert torch.cuda.is_available(), "requires a CUDA GPU"
-    major, _ = torch.cuda.get_device_capability()
-    assert major >= 10, "requires an SM100-or-newer GPU"
-
     tokens = 4
     generator = torch.Generator(device="cuda").manual_seed(42)
     q = torch.randn(
