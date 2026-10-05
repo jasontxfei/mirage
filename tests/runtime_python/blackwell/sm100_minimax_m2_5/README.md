@@ -22,6 +22,24 @@ projections before the head reshape. Therefore the existing fused path must not
 be advertised as MiniMax-compatible without a preprocessing task or a new
 cross-head normalization path.
 
-Next step: implement and validate an SM100 QK-normalization + partial-RoPE task
-against `pytorch_reference.py`, then feed its output into paged attention with
-the existing per-head normalization disabled.
+## Reuse boundary
+
+MiniMax support should reuse rather than duplicate these existing components:
+
+- `attention_sm100.cuh` already implements paged GQA, KV-cache handling, and
+  partial RoPE. The MiniMax-specific gap is projection-wide Q/K normalization;
+  it does not require another attention inner loop.
+- `topk_sigmoid_sm100.cuh` already implements 256-expert sigmoid-plus-bias
+  routing. Instantiating it with one group, top-8, and a scaling factor of one
+  matches the MiniMax routing rule; it does not require a new router.
+- The static-megakernel compiler and task ABI are being developed in PR #786.
+  Its current example supplies Kimi MoE task bodies, but no GQA task family.
+- Issue #780 separately tracks a library-level GQA template for GPT-OSS. Any
+  generic GQA-template work should be coordinated there rather than duplicated
+  under the MiniMax model work.
+
+Next step: implement and validate only the missing SM100 projection-wide
+QK-normalization + partial-RoPE preprocessing task against
+`pytorch_reference.py`, then connect it to the shared GQA implementation with
+the existing per-head normalization and RoPE disabled. Port the existing
+sigmoid router into the static task ABI when the MiniMax MoE slice begins.
